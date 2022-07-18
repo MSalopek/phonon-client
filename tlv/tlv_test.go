@@ -1,6 +1,7 @@
 package tlv
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/GridPlus/keycard-go/hexutils"
@@ -60,4 +61,23 @@ func TestParseTLV(t *testing.T) {
 		return
 	}
 	log.Debugf("appVersion: % X", appVersion)
+}
+
+// Example with tag being 0x11
+// A data length of 64 bytes will be 0x40 - so it would look like 0x1140
+// A data length of 130 bytes will be 0x81 0x83 - so it would look like 0x118183
+// A data length of 280 bytes will be 0x82 0x01 0x18 - so it would look like 0x11820118
+func TestParseBERTLVPacket(t *testing.T) {
+	cases := []string{
+		"A4 11 0C 06 4D 7E 6C 6C 65 72 02 01 1E 01 01 00 80 01 00",
+	}
+	for i, c := range cases {
+		r, err := ParseBERTLVPacket(hexutils.HexToBytes(c), TagAppVersion)
+		if err != nil {
+			fmt.Println("ERR", i, err)
+		}
+		for k, v := range r {
+			fmt.Println("##", k, len(v[0]))
+		}
+	}
 }

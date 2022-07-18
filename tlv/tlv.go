@@ -2,6 +2,7 @@ package tlv
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -84,6 +85,105 @@ func ParseTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error)
 		}
 	}
 
+}
+
+/*
+TODO: error handling!
+Parses a TLV encoded response structure
+Returning a flattened map where the keys are tags
+and the value is a slice of raw bytes, one entry for each tag instance found.
+For any "constructedTags" passed, the parser will recurse into the value of that
+tag to find internal TLV's and append them to the collection as flattened entries
+
+Extends the max length of Value to 65535 instead of 256 bytes.
+
+The TLV is parsed as follows:
+TAG: 1st byte
+LENGTH: can be encoded using a GROUP 1 to 3 bytes
+- 1st byte of LENGTH group defines the number of bytes encoding the LENGTH
+- case LENGTH < 0x7f (127) -> LENGTH encoded using single byte
+- CASE LENGTH > 0x7f (127) -> LENGTH encoded using 2 bytes
+    - the first byte will be 0x81
+	- second byte is the LENGTH
+- case LENGTH > 256 -> LENGTH encoded using 3 bytes
+    - first byte will be 0x82
+	- second and third bytes are the actual value LENGTH
+*/
+
+func ParseBERTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error) {
+	buf := bytes.NewReader(data)
+	result := make(TLVCollection)
+
+	// tag with length 0
+	// TODO: check correctness
+	if len(data) < 2 {
+		return result, nil
+	}
+
+	tag, length, seek, err := parsePrefix(data)
+	if err != nil {
+		return result, err
+	}
+	// set next read
+	buf.Seek(int64(seek), io.SeekStart)
+
+	value := make([]byte, int(length))
+	_, err = buf.Read(value)
+	if err != nil {
+		return result, ErrDataNotFound
+	}
+	result[tag] = append(result[tag], value)
+	for _, constructedTag := range constructedTags {
+		if tag == constructedTag {
+			nestedResult, err := ParseBERTLVPacket(value, constructedTags...)
+			if err != nil {
+				return result, err
+			}
+			result = mergeTLVCollections(result, nestedResult)
+		}
+	}
+	return result, nil
+}
+
+// Returns tag, length, seekOffset, err
+// TLV has structure: TAG[1byte]-LENGTH[1-3BYTE]-VALUE[N-Bytes]
+func parsePrefix(b []byte) (byte, int, int, error) {
+	if len(b) == 0 {
+		return 0, 0, 0, errors.New("prefix must be provided")
+	}
+
+	if len(b) < 2 {
+		return 0, 0, 0, errors.New("prefix too short")
+	}
+
+	tag := b[0]
+
+	// length group ob bytes starts at b[1] and can be from 1 to 3 bytes long
+	if b[1] <= 0x7F {
+		return tag, int(b[1]), 2, nil
+	}
+
+	// first 2 bytes of group represent length
+	// used for TLV.Value lengths between 128 and 255
+	if b[0] == 0x81 {
+		if len(b)-1 <= 0 {
+			return 0, 0, 0, errors.New("expected 2 bytes encoding - missing second byte")
+		}
+
+		return tag, int(b[2]), 3, nil
+	}
+
+	// first 3 bytes of group represent length
+	// used for TLV.Value lengths between 256 - 65535
+	if b[0] == 0x82 {
+		if len(b)-2 <= 0 {
+			return 0, 0, 0, errors.New("expected 3 bytes encoding - missing third byte")
+		}
+
+		return tag, int(binary.BigEndian.Uint16(b[2:4])), 4, nil
+	}
+
+	return 0, 0, 0, errors.New("invalid value prefix encoding")
 }
 
 func mergeTLVCollections(collections ...TLVCollection) TLVCollection {

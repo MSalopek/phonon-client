@@ -102,7 +102,7 @@ TAG: 1st byte
 LENGTH: can be encoded using a GROUP 1 to 3 bytes
 - 1st byte of LENGTH group defines the number of bytes encoding the LENGTH
 - case LENGTH < 0x7f (127) -> LENGTH encoded using single byte
-- CASE LENGTH > 0x7f (127) -> LENGTH encoded using 2 bytes
+- CASE 0x7f < LENGTH < 0xff -> LENGTH encoded using 2 bytes
     - the first byte will be 0x81
 	- second byte is the LENGTH
 - case LENGTH > 256 -> LENGTH encoded using 3 bytes
@@ -120,7 +120,7 @@ func ParseBERTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, err
 		return result, nil
 	}
 
-	tag, length, seek, err := parsePrefix(data)
+	tag, length, seek, err := parsePrefix(data[0:4])
 	if err != nil {
 		return result, err
 	}
@@ -146,40 +146,41 @@ func ParseBERTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, err
 }
 
 // Returns tag, length, seekOffset, err
-// TLV has structure: TAG[1byte]-LENGTH[1-3BYTE]-VALUE[N-Bytes]
+// TLV has structure: TAG-LENGTH[1-3Bytes]-VALUE[N-Bytes]
+// The TAG is the 1st byte.
+// The LENGTH bytes group starts at b[1] and can be 1 to 3 bytes long
+// The VALUE can be arbitrary length, and contain other TLVs (the structure is recursive)
 func parsePrefix(b []byte) (byte, int, int, error) {
 	if len(b) == 0 {
-		return 0, 0, 0, errors.New("prefix must be provided")
+		return 0, 0, 0, errors.New("prefix not provided")
 	}
 
 	if len(b) < 2 {
 		return 0, 0, 0, errors.New("prefix too short")
 	}
 
+	// NOTE: BER-TLV can contain multiple TAG bytes
+	// our implementation only uses single byte tags
+	// due to some smart contract restrictions
 	tag := b[0]
 
-	// length group ob bytes starts at b[1] and can be from 1 to 3 bytes long
 	if b[1] <= 0x7F {
 		return tag, int(b[1]), 2, nil
 	}
 
-	// first 2 bytes of group represent length
-	// used for TLV.Value lengths between 128 and 255
-	if b[0] == 0x81 {
-		if len(b)-1 <= 0 {
-			return 0, 0, 0, errors.New("expected 2 bytes encoding - missing second byte")
+	if b[1] == 0x81 {
+		if len(b) < 3 {
+			// TLV too short to encode 2 length bytes (TAG+2 LENGTH bytes)
+			return 0, 0, 0, errors.New("invalid TLV - expected 2 bytes length encoding")
 		}
-
 		return tag, int(b[2]), 3, nil
 	}
 
-	// first 3 bytes of group represent length
-	// used for TLV.Value lengths between 256 - 65535
-	if b[0] == 0x82 {
-		if len(b)-2 <= 0 {
-			return 0, 0, 0, errors.New("expected 3 bytes encoding - missing third byte")
+	if b[1] == 0x82 {
+		if len(b) < 4 {
+			// TLV too short to encode 3 length bytes (TAG+3 LENGTH bytes)
+			return 0, 0, 0, errors.New("invalid TLV - expected 3 bytes length encoding")
 		}
-
 		return tag, int(binary.BigEndian.Uint16(b[2:4])), 4, nil
 	}
 

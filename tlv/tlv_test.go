@@ -1,6 +1,7 @@
 package tlv
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
 
@@ -78,6 +79,7 @@ func TestParseBERTLVPacket(t *testing.T) {
 		}
 		for k, v := range r {
 			fmt.Println("##", k, len(v[0]))
+			fmt.Println("##", k, hex.EncodeToString(v[0]))
 		}
 	}
 }

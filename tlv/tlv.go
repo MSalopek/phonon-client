@@ -49,43 +49,42 @@ Returning a flattened map where the keys are tags
 and the value is a slice of raw bytes, one entry for each tag instance found.
 For any "constructedTags" passed, the parser will recurse into the value of that
 tag to find internal TLV's and append them to the collection as flattened entries */
-func ParseTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error) {
-	buf := bytes.NewBuffer(data)
-	result := make(TLVCollection)
+// func ParseTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error) {
+// 	buf := bytes.NewBuffer(data)
+// 	result := make(TLVCollection)
 
-	for {
-		tag, err := buf.ReadByte()
-		if err == io.EOF {
-			return result, nil
-		}
-		if err != nil {
-			return result, err
-		}
-		length, err := buf.ReadByte()
-		if err == io.EOF {
-			return result, nil
-		}
-		if err != nil {
-			return result, err
-		}
-		value := make([]byte, int(length))
-		_, err = buf.Read(value)
-		if err != nil {
-			return result, ErrDataNotFound
-		}
-		result[tag] = append(result[tag], value)
-		for _, constructedTag := range constructedTags {
-			if tag == constructedTag {
-				nestedResult, err := ParseTLVPacket(value, constructedTags...)
-				if err != nil {
-					return result, err
-				}
-				result = mergeTLVCollections(result, nestedResult)
-			}
-		}
-	}
-
-}
+// 	for {
+// 		tag, err := buf.ReadByte()
+// 		if err == io.EOF {
+// 			return result, nil
+// 		}
+// 		if err != nil {
+// 			return result, err
+// 		}
+// 		length, err := buf.ReadByte()
+// 		if err == io.EOF {
+// 			return result, nil
+// 		}
+// 		if err != nil {
+// 			return result, err
+// 		}
+// 		value := make([]byte, int(length))
+// 		_, err = buf.Read(value)
+// 		if err != nil {
+// 			return result, ErrDataNotFound
+// 		}
+// 		result[tag] = append(result[tag], value)
+// 		for _, constructedTag := range constructedTags {
+// 			if tag == constructedTag {
+// 				nestedResult, err := ParseTLVPacket(value, constructedTags...)
+// 				if err != nil {
+// 					return result, err
+// 				}
+// 				result = mergeTLVCollections(result, nestedResult)
+// 			}
+// 		}
+// 	}
+// }
 
 /*
 Parses a TLV encoded response structure
@@ -109,7 +108,7 @@ LENGTH: can be encoded using a GROUP 1 to 3 bytes
     - first byte will be 0x82
 	- second and third bytes are the actual value LENGTH
 */
-func ParseBERTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error) {
+func ParseTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error) {
 	buf := bytes.NewBuffer(data)
 	result := make(TLVCollection)
 

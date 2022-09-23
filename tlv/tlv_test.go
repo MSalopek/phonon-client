@@ -84,7 +84,7 @@ func TestParseBERTLVPacket(t *testing.T) {
 	}
 	for i, c := range cases {
 		fmt.Println("CASE", i)
-		r, err := ParseBERTLVPacket(hexutils.HexToBytes(c), TagAppVersion)
+		r, err := ParseTLVPacket(hexutils.HexToBytes(c), TagAppVersion)
 		if err != nil {
 			fmt.Println("ERR", i, err)
 		}

@@ -161,7 +161,7 @@ func ParseTLVPacket(data []byte, constructedTags ...byte) (TLVCollection, error)
 		result[tag] = append(result[tag], value)
 		for _, constructedTag := range constructedTags {
 			if tag == constructedTag {
-				nestedResult, err := ParseBERTLVPacket(value, constructedTags...)
+				nestedResult, err := ParseTLVPacket(value, constructedTags...)
 				if err != nil {
 					return result, err
 				}
